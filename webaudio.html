@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JS Based Power Electronics</title>
+<script>
+
+let processorCount = 0;
+
+
+const noiseCode0 = `
+class Processor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [{
+      name: 'gain',
+      defaultValue: 0.1
+    }];
+  }
+  constructor() {
+    super();
+    this.sampleRate = 44100;
+  }
+  process(inputs, outputs, parameters) {
+    const speakers = outputs[0];
+    for (let i = 0; i < speakers[0].length; i++) {
+      const noise = Math.random() * 2 - 1;
+      const gain = parameters.gain[i];
+      speakers[0][i] = ((noise * gain) + i)/i;
+      speakers[1][i] = ((noise * gain) - i)/i;
+    }
+    return true;
+  }
+}`;
+
+const noiseCode1 = `
+class Processor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [{
+      name: 'gain',
+      defaultValue: 0.1
+    }];
+  }
+  constructor() {
+    super();
+    this.sampleRate = 44100;
+  }
+  process(inputs, outputs, parameters) {
+    const speakers = outputs[0];
+    for (let i = 0; i < speakers[0].length; i++) {
+      const noise = Math.random() * 2 - 1;
+      const gain = parameters.gain[i];
+      speakers[0][i] = noise * gain - i;
+      speakers[1][i] = noise * gain + i;
+    }
+    return true;
+  }
+}`;
+
+const noiseCode2 = `
+class Processor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [{
+      name: 'gain',
+      defaultValue: 0.1
+    }];
+  }
+  constructor() {
+    super();
+    this.sampleRate = 44100;
+  }
+  process(inputs, outputs, parameters) {
+    const speakers = outputs[0];
+    for (let i = 0; i < speakers[0].length; i++) {
+      const noise = Math.random() * 2 - 1;
+      const gain = parameters.gain[i];
+      speakers[0][i] = (noise * gain * speakers[0].length)/Math.random();
+      speakers[1][i] = (noise * gain * speakers[1].length)/Math.random();
+    }
+    return true;
+  }
+}`;
+
+window.AudioNode = class AudioNode extends AudioWorkletNode {
+    constructor(audioContext, processorName) {
+      super(audioContext, processorName, {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+      });
+      this.processorName = processorName;
+    }
+  };
+
+function compileNoiseCode(userCode) {
+    const processorName = `processor-${processorCount++}`;
+    const code = createProcessorCode(userCode, processorName);
+    const blob = new Blob([code], { type: "application/javascript" });
+    const url = window.URL.createObjectURL(blob);
+    return {url: url, processorName: processorName};
+  }
+
+function createProcessorCode(userCode, processorName) {
+  return `${userCode}
+  registerProcessor("${processorName}", Processor);`;
+}
+
+function createAudioWorklet(workletUrl, processorName, audio) {
+  return audio.audioWorklet.addModule(workletUrl).then(() => {
+    var node = new AudioNode(audio, processorName);
+    node.connect(audio.destination);
+    return node;
+  });
+}
+
+function startAudio(node, audio) {
+  if (node !== undefined) {
+    node.connect(node.context.desination);
+  }
+}
+
+function stopAudio(node) {
+  if (node !== undefined) {
+    node.disconnect(node.context.desination);
+  }
+}
+
+function recursiveIntervals(mod, audio){
+  createAudioWorklet(mod.url, mod.processorName, audio).then(function(node){
+    window.setTimeout(function(){
+      stopAudio(node); 
+      window.setTimeout(function(){
+        recursiveIntervals(mod, audio)},
+        Math.floor((Math.random() * 10000)/7))}, 
+      Math.floor(Math.random() * 10000))
+  })
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.AudioContext === undefined || window.AudioWorklet === undefined) {
+    document.write('unsupported browser :(')
+  }
+  else {
+    var audio = new AudioContext();
+    var module0 = compileNoiseCode(noiseCode0);
+    var module1 = compileNoiseCode(noiseCode1);
+    var module2 = compileNoiseCode(noiseCode2);
+    recursiveIntervals(module0, audio);
+    recursiveIntervals(module1, audio);
+    recursiveIntervals(module2, audio);
+  }
+});
+</script>
+
+</head>
+<body>
+  <h1>JS Based Power Electronics</h1>
+</body>
+</html>
